@@ -38,3 +38,11 @@ vignettes/*.pdf
 ._research_area.png
 ._Soil_profiles.txt
 ._.gitignore
+._plots
+plots/._Algorithms accuracy comparing. SOC. L8&DEM.tif
+plots/._Algorithms accuracy comparing. SOC. S2&DEM.tif
+plots/._Importance BART SOC L8&DEM.tif
+plots/._Importance BART SOC S2&DEM.tif
+plots/._Importance RF SOC S2&DEM.tif
+plots/._Predicted SOC L8&DEM.tif
+plots/._Predicted SOC S2&DEM.tif
