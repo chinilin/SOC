@@ -31,3 +31,10 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+._grid_L8&DEM_v2.txt
+._grid_S2&DEM.txt
+._MLA.R
+._README.md
+._research_area.png
+._Soil_profiles.txt
+._.gitignore
