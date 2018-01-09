@@ -131,7 +131,7 @@ formulaStringSm <- as.formula(paste("Sm~", paste(paste0("PC", 1:17), collapse="+
 ctrl <- trainControl(method = "LOOCV", returnResamp = "final")
 ctrl1 <- trainControl(method = "repeatedcv", number = 5, repeats = 10, allowParallel = TRUE) # 5-fold CV
 ctrl2 <- trainControl(method = "cv", number = 5)
-
+#-----------------------------------------------------------------------------#
 # RF or ranger
 rf.tuneGrid <- expand.grid(mtry = seq(1, 4, by = 1))
 ranger.tuneGrid <- expand.grid(mtry = seq(1, 17, by = 1),
@@ -192,14 +192,6 @@ SOC.cb <- train(formulaString2,
                 preProcess = "pca")
 w4 <- min(SOC.cb$results$RMSE)
 plot(varImp(object = SOC.cb), main = "Cubist - Variable Importance",
-     top = 4, ylab = "Variable")
-#-----------------------------------------------------------------------------#
-par(mfrow=c(3,1))
-plot(varImp(object = SOC.rf), main = "RF - Variable Importance",
-     top = 4, ylab = "Variable")
-plot(varImp(object = SOC.xgb), main = "XGBoost - Variable Importance",
-     top = 4, ylab = "Variable")
-plot(varImp(object = SOC.bm), main = "BART - Variable Importance",
      top = 4, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # compile models and compare perfomance
