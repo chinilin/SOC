@@ -13,7 +13,7 @@ library(bartMachine)
 library(maptools)
 library(ranger)
 
-# load and prepare data
+# load and prepare the data set which consists of soil profiles and stack of rasters containing all covariates:
 crs = CRS('+init=epsg:32637')
 data <- read.table("Soil_profiles.txt", header = T, sep = "\t")
 coordinates(data) <- ~x+y
@@ -31,10 +31,9 @@ data.grid <- read.table("grid_S2&DEM.txt", header = T, sep = "\t") # on Sentinel
 data.grid[data.grid == -99999] <- NA
 # which(!complete.cases(data.grid)) # NA
 data.grid <- na.omit(data.grid)
-coordinates(data.grid) <- ~x+y
-gridded(data.grid) <- T
-data.grid@proj4string <- crs
-
+#-----------------------------------------------------------------------------#
+# NOT RUN
+# lets see a correlation plot between predictors
 library(corrplot)
 cor <- data.grid[, -c(1:37,40:43,45:46)]
 m <- cor(cor)
@@ -46,7 +45,10 @@ corrplot(m, method = "circle")
 # correlation matrices
 library(PerformanceAnalytics)
 chart.Correlation(data.grid[, 47:62], histogram = TRUE, pch = 19) # some example
-
+coordinates(data.grid) <- ~x+y
+gridded(data.grid) <- T
+data.grid@proj4string <- crs
+#-----------------------------------------------------------------------------#
 # plot using Leaflet:
 library(leaflet)
 r = raster(data.grid["DEM"])
@@ -57,7 +59,12 @@ leaflet() %>%
   addLegend(pal = pal, values = values(r), title = "Elevation, m")
 #-----------------------------------------------------------------------------#
 # NOT RUN
-# The covariates can be further converted to principal components:
+# According Hengl T.(http://gsif.isric.org/doku.php) it is also probably a good idea to convert all covariates to independent
+# components. This way, it will be easier to subset to the optimal number of
+# predictors during the regression analysis. PCA helps reducing the prediction
+# bias, which might happen if the covariates are cross-correlated. A wrapper
+# function spc will convert all factor variables to indicators and run PCA on a stack of grids:
+
 # on L8 data
 data_spc1 <- spc(data.grid, ~ L8b2_mean + L8b3_mean + L8b4_mean + # strategy №1 on L8 data
                   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
@@ -85,7 +92,9 @@ data_spc4 <- spc(data.grid, ~ S2_B02_20160409 + S2_B03_20160409 +
                   GR_20160409 + GNIR_20160409 + RB_20160409 + 
                   RG_20160409 + RNIR_20160409 + NIRB_20160409 + 
                   NIRG_20160409 + NIRR_20160409 + FA + TWI + SLP)
-
+# The output from this operation is a stack of independent components,
+# all numeric and all scaled around 0 value. 
+#-----------------------------------------------------------------------------#
 # All further analysis is run using the regression matrix (produced
 # using overlay of points and grids), which contains values of the
 # target variable and all covariates for all training points:
@@ -95,7 +104,6 @@ data.grid@data <- cbind(data.grid@data, data_spc1@predicted@data)
 overlay <- over(data, data.grid)
 reg.matrix <- cbind(overlay, data@data)
 dim(reg.matrix)
-
 # or
 overlay <- over(data.minerals, data.grid)
 reg.matrix <- cbind(overlay, data.minerals@data)
@@ -126,12 +134,12 @@ formulaStringSOC <- as.formula(paste("SOC~", paste(paste0("PC", 1:17), collapse=
 formulaStringKaol <- as.formula(paste("Kaol~", paste(paste0("PC", 1:17), collapse="+")))
 formulaStringSm <- as.formula(paste("Sm~", paste(paste0("PC", 1:17), collapse="+")))
 
-
 # compile cross-validation settings
 ctrl <- trainControl(method = "LOOCV", returnResamp = "final")
 ctrl1 <- trainControl(method = "repeatedcv", number = 5, repeats = 10, allowParallel = TRUE) # 5-fold CV
 ctrl2 <- trainControl(method = "cv", number = 5)
 #-----------------------------------------------------------------------------#
+# Models fitting
 # RF or ranger
 rf.tuneGrid <- expand.grid(mtry = seq(1, 4, by = 1))
 ranger.tuneGrid <- expand.grid(mtry = seq(1, 17, by = 1),
@@ -194,13 +202,13 @@ w4 <- min(SOC.cb$results$RMSE)
 plot(varImp(object = SOC.cb), main = "Cubist - Variable Importance",
      top = 4, ylab = "Variable")
 #-----------------------------------------------------------------------------#
-# compile models and compare perfomance
+# compare perfomance
 # if we use "ctrl1" or "ctrl2" in "trControl" parametres
 model_list <- list(RF = SOC.rf, XGBoost = SOC.xgb, BART = SOC.bm)
 results <- resamples(model_list)
 summary(results)
 # boxplot comparing results
-bwplot(results, layout = c(3, 1))
+bwplot(results, layout = c(3, 1)) # RMSE, MSE and R-squared
 bwplot(results, metric = "Rsquared", main = "Algorithms accuracy comparing")
 bwplot(results, metric = "RMSE", main = "Algorithms accuracy comparing")
 #-----------------------------------------------------------------------------#
@@ -234,7 +242,9 @@ data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.
 data.grid$Kaol.WA <- (data.grid$Kaol.RF*w1+data.grid$Kaol.bartMachine*w3)/(w1+w3)
 data.grid$Sm.WA <- (data.grid$Sm.RF*w1+data.grid$Sm.bartMachine*w3)/(w1+w3)
 plot((stack(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")])), col=SAGA_pal[[1]])
-
+plot((stack(data.grid[c("Kaol.RF", "Kaol.bartMachine", "Kaol.WA")])), col=SAGA_pal[[1]])
+plot((stack(data.grid[c("Sm.RF", "Sm.bartMachine", "Sm.WA")])), col=SAGA_pal[[1]])
+#-----------------------------------------------------------------------------#
 # plot using Leaflet:
 library(leaflet)
 r = raster(data.grid["SOC.WA"])
@@ -242,17 +252,14 @@ pal <- colorNumeric(R_pal[["soc_pal"]], values(r), na.color = "transparent")
 leaflet() %>% addTiles() %>%
   addRasterImage(r, colors = pal, opacity = 1) %>%
   addLegend(pal = pal, values = values(r), title = "SOC, %")
-
+#-----------------------------------------------------------------------------#
 # plot with plotKML
 plotKML(data.grid["SOC.WA"], colour_scale = R_pal[["soc_pal"]])
-
+#-----------------------------------------------------------------------------#
 # plot in GoogleMaps:
 library(plotGoogleMaps)
 mp <- plotGoogleMaps(data.grid, filename='SOC.html', zcol='SOC.WA', add=TRUE, colPalette=SAGA_pal[[1]])
-
-plot((stack(data.grid[c("Kaol.RF", "Kaol.bartMachine", "Kaol.WA")])), col=SAGA_pal[[1]])
-plot((stack(data.grid[c("Sm.RF", "Sm.bartMachine", "Sm.WA")])), col=SAGA_pal[[1]])
-
+#-----------------------------------------------------------------------------#
 # or use spplot
 # studarea <- readShapePoly("Fields.shp")
 # area <- list("sp.polygons", studarea, col = "black", lwd = 3)
@@ -271,7 +278,7 @@ spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")],
        sp.layout = list(#area,
                       points, scale, text1, text2, arrow),
        main = "Predicted soil organic carbon content, %")
-
+#-----------------------------------------------------------------------------#
 # for minerals content predictions
 spplot(data.grid[c("Kaol.RF", "Kaol.XGBoost", "Kaol.bartMachine", "Kaol.WA")],
        col.regions = SAGA_pal[[1]],
@@ -280,7 +287,7 @@ spplot(data.grid[c("Kaol.RF", "Kaol.XGBoost", "Kaol.bartMachine", "Kaol.WA")],
        sp.layout = list(#area,
          points, scale, text1, text2, arrow),
        main = "Predicted Kaolinite content, %")
-
+#-----------------------------------------------------------------------------#
 require(gridExtra)
 grid.arrange(spplot(data.grid["Kaol.RF"], col.regions = SAGA_pal[[1]],
                     sp.layout = list(points, scale, text1, text2, arrow),
@@ -289,7 +296,7 @@ spplot(data.grid["Sm.RF"], col.regions = SAGA_pal[[1]],
        sp.layout = list(points, scale, text1, text2, arrow),
        main = "Predicted Smektite content, %"),
 ncol = 2, nrow = 1)
-
+#-----------------------------------------------------------------------------#
 # save as .png with 300 dpi
 png("Predicted SOC L8&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
 png("Predicted SOC S2&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
