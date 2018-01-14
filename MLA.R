@@ -26,6 +26,8 @@ data.minerals <- na.omit(data.minerals)
 coordinates(data.minerals) <- ~x+y
 data.minerals@proj4string <- crs
 
+# preparation (producing DEM derinatives, filtering and cutting raster layers, converting,
+# overlaying and others operations) of soil covariates was conducted with SAGA GIS (http://www.saga-gis.org/en/index.html)
 data.grid <- read.table("grid_L8&DEM_v2.txt", header = T, sep = "\t") # on Landsat 8 data & DEM derivatives (30 m)
 data.grid <- read.table("grid_S2&DEM.txt", header = T, sep = "\t") # on Sentinel 2 data & DEM derivatives (10 m)
 data.grid[data.grid == -99999] <- NA
@@ -59,20 +61,20 @@ leaflet() %>%
   addLegend(pal = pal, values = values(r), title = "Elevation, m")
 #-----------------------------------------------------------------------------#
 # NOT RUN
-# According Hengl T.(http://gsif.isric.org/doku.php) it is also probably a good idea to convert all covariates to independent
+# According Hengl T.(http://gsif.isric.org/doku.php), it is also probably a good idea to convert all covariates to independent
 # components. This way, it will be easier to subset to the optimal number of
-# predictors during the regression analysis. PCA helps reducing the prediction
+# predictors during the analysis. Principal component analysis (PCA) helps reducing the prediction
 # bias, which might happen if the covariates are cross-correlated. A wrapper
 # function spc will convert all factor variables to indicators and run PCA on a stack of grids:
 
-# on L8 data
+# on L8 data (Surface Reflectance Level 2 product)
 data_spc1 <- spc(data.grid, ~ L8b2_mean + L8b3_mean + L8b4_mean + # strategy №1 on L8 data
                   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
                   GB_mean + GR_mean + GNIR_mean + RB_mean + 
                   RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
                   NIRR_mean + FA + TWI + SLP)
 
-data_spc2 <- spc(data.grid, ~ L8b2_24MART2014 + L8b3_24MART2014 +L8b4_24MART2014 + # startegy №2 on L8 data
+data_spc2 <- spc(data.grid, ~ L8b2_24MART2014 + L8b3_24MART2014 + L8b4_24MART2014 + # startegy №2 on L8 data
                    L8b5_24MART2014 + BG_24MART2014 + BR_24MART2014 + BNIR_24MART2014 + 
                    GB_24MART2014 + GR_24MART2014 + GNIR_24MART2014 +
                    RB_24MART2014 + RG_24MART2014 + RNIR_24MART2014 + 
@@ -85,7 +87,7 @@ data_spc3 <- spc(data.grid, ~ L8b2_25APR2014 + L8b3_25APR2014 +L8b4_25APR2014 + 
                    RB_25APR2014 + RG_25APR2014 + RNIR_25APR2014 + 
                    NIRR_25APR2014 + NIRG_25APR2014 + NIRR_25APR2014 +
                    FA + TWI + SLP)
-# on S2 data
+# on S2 data (DN coverted to reflectance by using "Semi-Automated Classification Plugin" in QGIS)
 data_spc4 <- spc(data.grid, ~ S2_B02_20160409 + S2_B03_20160409 + 
                   S2_B04_20160409 + S2_B08_20160409 + BG_20160409 + 
                   BR_20160409 + BNIR_20160409 + GB_20160409 + 
