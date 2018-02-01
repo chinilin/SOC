@@ -33,6 +33,9 @@ data.grid <- read.table("grid_S2&DEM.txt", header = T, sep = "\t") # on Sentinel
 data.grid[data.grid == -99999] <- NA
 # which(!complete.cases(data.grid)) # NA
 data.grid <- na.omit(data.grid)
+coordinates(data.grid) <- ~x+y
+gridded(data.grid) <- T
+data.grid@proj4string <- crs
 #-----------------------------------------------------------------------------#
 # NOT RUN
 # lets see a correlation plot between predictors
@@ -47,9 +50,6 @@ corrplot(m, method = "circle")
 # correlation matrices
 library(PerformanceAnalytics)
 chart.Correlation(data.grid[, 47:62], histogram = TRUE, pch = 19) # some example
-coordinates(data.grid) <- ~x+y
-gridded(data.grid) <- T
-data.grid@proj4string <- crs
 #-----------------------------------------------------------------------------#
 # plot using Leaflet:
 library(leaflet)
@@ -81,7 +81,7 @@ data_spc2 <- spc(data.grid, ~ L8b2_24MART2014 + L8b3_24MART2014 + L8b4_24MART201
                    NIRR_24MART2014 + NIRG_24MART2014 + NIRR_24MART2014 + 
                    FA + TWI + SLP)
 
-data_spc3 <- spc(data.grid, ~ L8b2_25APR2014 + L8b3_25APR2014 +L8b4_25APR2014 + # startegy №3 on L8 data
+data_spc3 <- spc(data.grid, ~ L8b2_25APR2014 + L8b3_25APR2014 + L8b4_25APR2014 + # startegy №3 on L8 data
                    L8b5_25APR2014 + BG_25APR2014 + BR_25APR2014 + BNIR_25APR2014 + 
                    GB_25APR2014 + GR_25APR2014 + GNIR_25APR2014 +
                    RB_25APR2014 + RG_25APR2014 + RNIR_25APR2014 + 
@@ -111,20 +111,28 @@ overlay <- over(data.minerals, data.grid)
 reg.matrix <- cbind(overlay, data.minerals@data)
 dim(reg.matrix)
 #-----------------------------------------------------------------------------#
-# only on L8 SR bands & spectral indices (without factor analysis)
+# on L8 bands, spectral indices & dem derivatives
 formulaString1 <- SOC ~ L8b2_mean + L8b3_mean + L8b4_mean + 
   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
   GB_mean + GR_mean + GNIR_mean + RB_mean + 
   RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
-  NIRR_mean
-# on L8 bands, spectral indices & dem derivatives
-formulaString2 <- SOC ~ L8b2_mean + L8b3_mean + L8b4_mean + 
-  L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
-  GB_mean + GR_mean + GNIR_mean + RB_mean + 
-  RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
   NIRR_mean + FA + TWI + SLP
+# on L8 band (MART 2014), spectral indices & dem derivatives
+formulaString2 <- SOC ~ L8b2_24MART2014 + L8b3_24MART2014 + L8b4_24MART2014 +
+  L8b5_24MART2014 + BG_24MART2014 + BR_24MART2014 + BNIR_24MART2014 + 
+  GB_24MART2014 + GR_24MART2014 + GNIR_24MART2014 +
+  RB_24MART2014 + RG_24MART2014 + RNIR_24MART2014 + 
+  NIRR_24MART2014 + NIRG_24MART2014 + NIRR_24MART2014 + 
+  FA + TWI + SLP
+# on L8 band (APR 2014), spectral indices & dem derivatives
+formulaString3 <- SOC ~ L8b2_25APR2014 + L8b3_25APR2014 + L8b4_25APR2014 +
+  L8b5_25APR2014 + BG_25APR2014 + BR_25APR2014 + BNIR_25APR2014 + 
+  GB_25APR2014 + GR_25APR2014 + GNIR_25APR2014 +
+  RB_25APR2014 + RG_25APR2014 + RNIR_25APR2014 + 
+  NIRR_25APR2014 + NIRG_25APR2014 + NIRR_25APR2014 +
+  FA + TWI + SLP
 # on S2 SR bands, spectral indices & dem derivatives
-formulaString3 <- SOC ~ S2_B02_20160409 + S2_B03_20160409 + 
+formulaString4 <- SOC ~ S2_B02_20160409 + S2_B03_20160409 + 
   S2_B04_20160409 + S2_B08_20160409 + BG_20160409 + 
   BR_20160409 + BNIR_20160409 + GB_20160409 + 
   GR_20160409 + GNIR_20160409 + RB_20160409 + 
