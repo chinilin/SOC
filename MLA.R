@@ -112,7 +112,7 @@ reg.matrix <- cbind(overlay, data.minerals@data)
 dim(reg.matrix)
 #-----------------------------------------------------------------------------#
 # on L8 bands, spectral indices & dem derivatives
-formulaString1 <- Kaol ~ L8b2_mean + L8b3_mean + L8b4_mean + 
+formulaString1 <- Sm ~ L8b2_mean + L8b3_mean + L8b4_mean + 
   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
   GB_mean + GR_mean + GNIR_mean + RB_mean + 
   RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
@@ -145,14 +145,15 @@ formulaStringKaol <- as.formula(paste("Kaol~", paste(paste0("PC", 1:17), collaps
 formulaStringSm <- as.formula(paste("Sm~", paste(paste0("PC", 1:17), collapse="+")))
 
 # compile cross-validation settings
+set.seed(1234)
 ctrl <- trainControl(method = "LOOCV", returnResamp = "final")
 ctrl1 <- trainControl(method = "repeatedcv", number = 5, repeats = 10, allowParallel = TRUE) # 5-fold CV
 ctrl2 <- trainControl(method = "cv", number = 5)
 #-----------------------------------------------------------------------------#
 # Models fitting
 # RF or ranger
-rf.tuneGrid <- expand.grid(mtry = seq(1, 4, by = 1))
-ranger.tuneGrid <- expand.grid(mtry = seq(1, 17, by = 1),
+rf.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1))
+ranger.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1),
                                splitrule = c("extratrees", "variance", "maxstat"),
                                min.node.size = 5)
 set.seed(1234)
@@ -162,11 +163,10 @@ Kaol.rf <- train(formulaString1, # can change formulastring
                 tuneGrid = rf.tuneGrid,
                 trControl = ctrl1,
                 importance = TRUE,
-                preProcess = "pca")
+                preProcess = c("center", "scale")) # "pca"
 w1 <- min(Kaol.rf$results$RMSE)
-varImpPlot(Kaol.rf$finalModel, main = "RF - Variable importance") # for "rf"
 plot(varImp(object = Kaol.rf), main = "RF - Variable Importance",
-     top = 4, ylab = "Variable") # for "ranger"
+     top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # XGBoost
 gb.tuneGrid <- expand.grid(eta = c(0.3,0.4,0.5,0.6),
@@ -179,10 +179,10 @@ Kaol.xgb <- train(formulaString1, data = reg.matrix,
                  method = "xgbTree",
                  tuneGrid = gb.tuneGrid,
                  trControl = ctrl1,
-                 preProcess = "pca")
+                 preProcess = c("center", "scale"))
 w2 <- min(Kaol.xgb$results$RMSE)
 plot(varImp(object = Kaol.xgb), main = "XGBoost - Variable Importance",
-     top = 4, ylab = "Variable")
+     top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # bartMachine (Bayesian Additive Regression Trees)
 bm.tuneGrid <- expand.grid(num_trees = c(20,50,80,110),
@@ -193,11 +193,11 @@ Kaol.bm <- train(formulaString1, data = reg.matrix,
                 method = "bartMachine",
                 tuneGrid = bm.tuneGrid,
                 trControl = ctrl1,
-                preProcess = "pca",
+                preProcess = c("center", "scale"),
                 verbose = F)
 w3 <- min(Kaol.bm$results$RMSE)
 plot(varImp(object = Kaol.bm), main = "BART - Variable Importance",
-     top = 4, ylab = "Variable")
+     top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # the same using the "Cubist" package:
 set.seed(1234)
@@ -250,7 +250,7 @@ data.grid$Klin.Cubist <- predict(Klin.cb, data.grid@data, na.action = na.pass)
 
 # final prediction as weighted average:
 data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.bartMachine*w3)/(w1+w2+w3)
-data.grid$Kaol.WA <- (data.grid$Kaol.RF*w1+data.grid$Kaol.bartMachine*w3)/(w1+w3)
+data.grid$Kaol.WA <- (data.grid$Kaol.RF*w1+data.grid$Kaol.XGBoost*w2+data.grid$Kaol.bartMachine*w3)/(w1+w2+w3)
 data.grid$Sm.WA <- (data.grid$Sm.RF*w1+data.grid$Sm.bartMachine*w3)/(w1+w3)
 plot((stack(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Kaol.RF", "Kaol.bartMachine", "Kaol.WA")])), col=SAGA_pal[[1]])
@@ -292,7 +292,7 @@ spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")],
 #-----------------------------------------------------------------------------#
 # for minerals content predictions
 spplot(data.grid[c("Kaol.RF", "Kaol.XGBoost", "Kaol.bartMachine", "Kaol.WA")],
-       col.regions = SAGA_pal[[1]],
+       col.regions = SAGA_pal[[3]],
        # scales = list(draw = T),
        names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
        sp.layout = list(#area,
