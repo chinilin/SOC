@@ -6,6 +6,6 @@ This repo describes the development and accuracy assessment of soil organic carb
 ![research area](https://github.com/chinilin/SOC/blob/master/research_area.png)
 
  Citation:
- * Chinilin A.V., Savin I. Yu. The large scale digital mapping of soil organic carbon using machine learning algorithms, Dokuchaev Soil Bulletin, 2018, Vol. 91, pp. 46-62. doi: 10.19047/0136-1694-2018-91-46-62
+ * Chinilin A.V., Savin I. Yu. [The large scale digital mapping of soil organic carbon using machine learning algorithms] (http://esoil.ru/publications/bulletin/ns912018/912018ns4.html), Dokuchaev Soil Bulletin, 2018, Vol. 91, pp. 46-62. doi: 10.19047/0136-1694-2018-91-46-62
  
 Contact: andreychinilin@gmail.com
