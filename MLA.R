@@ -112,7 +112,7 @@ reg.matrix <- cbind(overlay, data.minerals@data)
 dim(reg.matrix)
 #-----------------------------------------------------------------------------#
 # on L8 bands, spectral indices & dem derivatives
-formulaString1 <- Sm ~ L8b2_mean + L8b3_mean + L8b4_mean + 
+formulaString1 <- SOC ~ L8b2_mean + L8b3_mean + L8b4_mean + 
   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
   GB_mean + GR_mean + GNIR_mean + RB_mean + 
   RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
@@ -150,7 +150,34 @@ ctrl <- trainControl(method = "LOOCV", returnResamp = "final")
 ctrl1 <- trainControl(method = "repeatedcv", number = 5, repeats = 10, allowParallel = TRUE) # 5-fold CV
 ctrl2 <- trainControl(method = "cv", number = 5)
 #-----------------------------------------------------------------------------#
-# Models fitting
+# models fitting with "ranger" package
+# derivation of RF uncertainty (maps) for regression (from GeoMLA repo, T. Hengl & M. Wright)
+quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
+SOC.qrf <- ranger(formulaString1,
+                  reg.matrix,
+                  num.trees=500,
+                  importance = "impurity",
+                  seed = 1,
+                  quantreg = TRUE)
+SOC.qrf
+pred.SOC.rfq = predict(SOC.qrf, data.grid@data, type="quantiles", quantiles=quantiles)
+data.grid$SOC_rfq_U = pred.SOC.rfq$predictions[,3]
+data.grid$SOC_rfq_L = pred.SOC.rfq$predictions[,1]
+# assuming normal distribution of errors this should match 1 s.d. of the prediction error:
+data.grid$SOC_rfq_r = (data.grid$SOC_rfq_U - data.grid$SOC_rfq_L)/2
+hist(data.grid$SOC_rfq_r)
+# compare OOB RMSE and mean s.d. of prediction error:
+mean(data.grid$SOC_rfq_r, na.rm=TRUE); sqrt(SOC.qrf$prediction.error)
+# Regression prediction
+pred.regr <- predict(SOC.qrf, data.grid@data, type="response")$predictions
+data.grid$SOC_pred <- pred.regr
+spplot(data.grid[c("SOC_rfq_U", "SOC_pred", "SOC_rfq_L")],
+       col.regions = R_pal[["soc_pal"]],
+       # scales = list(draw = T),
+       names.attr = c("Upper limit","RF regr", "Lower limit"),
+       main = "Predicted soil organic carbon content, %")
+#-----------------------------------------------------------------------------#
+# Models fitting (with "caret" package)
 # RF or ranger
 rf.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1))
 ranger.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1),
