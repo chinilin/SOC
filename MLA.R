@@ -38,7 +38,7 @@ gridded(data.grid) <- T
 data.grid@proj4string <- crs
 #-----------------------------------------------------------------------------#
 # NOT RUN
-# lets see a correlation plot between predictors
+# lets see a correlation plot between predictors & response variable
 library(corrplot)
 cor <- data.grid[, -c(1:37,40:43,45:46)]
 m <- cor(cor)
@@ -184,15 +184,15 @@ ranger.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1),
                                splitrule = c("extratrees", "variance", "maxstat"),
                                min.node.size = 5)
 set.seed(1234)
-Kaol.rf <- train(formulaString1, # can change formulastring
+SOC.rf <- train(formulaString1, # can change formulastring
                 data = reg.matrix,
                 method = "rf", # or "ranger"
                 tuneGrid = rf.tuneGrid,
                 trControl = ctrl1,
                 importance = TRUE,
                 preProcess = c("center", "scale")) # "pca"
-w1 <- min(Kaol.rf$results$RMSE)
-plot(varImp(object = Kaol.rf), main = "RF - Variable Importance",
+w1 <- min(SOC.rf$results$RMSE)
+plot(varImp(object = SOC.rf), main = "RF - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # XGBoost
@@ -202,13 +202,13 @@ gb.tuneGrid <- expand.grid(eta = c(0.3,0.4,0.5,0.6),
                            colsample_bytree = 0.8, min_child_weight = 1,
                            subsample = 1)
 set.seed(1234)
-Kaol.xgb <- train(formulaString1, data = reg.matrix,
+SOC.xgb <- train(formulaString1, data = reg.matrix,
                  method = "xgbTree",
                  tuneGrid = gb.tuneGrid,
                  trControl = ctrl1,
                  preProcess = c("center", "scale"))
-w2 <- min(Kaol.xgb$results$RMSE)
-plot(varImp(object = Kaol.xgb), main = "XGBoost - Variable Importance",
+w2 <- min(SOC.xgb$results$RMSE)
+plot(varImp(object = SOC.xgb), main = "XGBoost - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # bartMachine (Bayesian Additive Regression Trees)
@@ -216,14 +216,14 @@ bm.tuneGrid <- expand.grid(num_trees = c(20,50,80,110),
                            k = 2, alpha = .95,
                            beta = 2, nu = 3)
 set.seed(1234)
-Kaol.bm <- train(formulaString1, data = reg.matrix,
+SOC.bm <- train(formulaString1, data = reg.matrix,
                 method = "bartMachine",
                 tuneGrid = bm.tuneGrid,
                 trControl = ctrl1,
                 preProcess = c("center", "scale"),
                 verbose = F)
-w3 <- min(Kaol.bm$results$RMSE)
-plot(varImp(object = Kaol.bm), main = "BART - Variable Importance",
+w3 <- min(SOC.bm$results$RMSE)
+plot(varImp(object = SOC.bm), main = "BART - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # the same using the "Cubist" package:
@@ -235,13 +235,13 @@ SOC.cb <- train(formulaString1,
                                      neighbors = c(5,7,9)),
                 trControl = ctrl1,
                 preProcess = "pca")
-w4 <- min(Kaol.cb$results$RMSE)
-plot(varImp(object = Kaol.cb), main = "Cubist - Variable Importance",
+w4 <- min(SOC.cb$results$RMSE)
+plot(varImp(object = SOC.cb), main = "Cubist - Variable Importance",
      top = 4, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # compare perfomance
 # if we use "ctrl1" or "ctrl2" in "trControl" parametres
-model_list <- list(RF = SOC.rf, XGBoost = SOC.xgb, BART = SOC.bm)
+model_list <- list(RF = SOC.rf, XGBoost = SOC.xgb, BART = SOC.bm, Cubist = SOC.cb)
 model_list <- list(RF = Kaol.rf, XGBoost = Kaol.xgb, BART = Kaol.bm)
 results <- resamples(model_list)
 summary(results)
