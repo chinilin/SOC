@@ -150,33 +150,6 @@ ctrl <- trainControl(method = "LOOCV", returnResamp = "final")
 ctrl1 <- trainControl(method = "repeatedcv", number = 5, repeats = 10, allowParallel = TRUE) # 5-fold CV
 ctrl2 <- trainControl(method = "cv", number = 5)
 #-----------------------------------------------------------------------------#
-# models fitting with "ranger" package
-# derivation of RF uncertainty (maps) for regression (from GeoMLA repo, T. Hengl & M. Wright)
-quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
-SOC.qrf <- ranger(formulaString1,
-                  reg.matrix,
-                  num.trees=500,
-                  importance = "impurity",
-                  seed = 1,
-                  quantreg = TRUE)
-SOC.qrf
-pred.SOC.rfq = predict(SOC.qrf, data.grid@data, type="quantiles", quantiles=quantiles)
-data.grid$SOC_rfq_U = pred.SOC.rfq$predictions[,3]
-data.grid$SOC_rfq_L = pred.SOC.rfq$predictions[,1]
-# assuming normal distribution of errors this should match 1 s.d. of the prediction error:
-data.grid$SOC_rfq_r = (data.grid$SOC_rfq_U - data.grid$SOC_rfq_L)/2
-hist(data.grid$SOC_rfq_r)
-# compare OOB RMSE and mean s.d. of prediction error:
-mean(data.grid$SOC_rfq_r, na.rm=TRUE); sqrt(SOC.qrf$prediction.error)
-# Regression prediction
-pred.regr <- predict(SOC.qrf, data.grid@data, type="response")$predictions
-data.grid$SOC_pred <- pred.regr
-spplot(data.grid[c("SOC_rfq_U", "SOC_pred", "SOC_rfq_L")],
-       col.regions = R_pal[["soc_pal"]],
-       # scales = list(draw = T),
-       names.attr = c("Upper limit","RF regr", "Lower limit"),
-       main = "Predicted soil organic carbon content, %")
-#-----------------------------------------------------------------------------#
 # Models fitting (with "caret" package)
 # RF or ranger
 rf.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1))
@@ -344,3 +317,84 @@ dev.off()
 raster.data <- stack(data.grid)
 writeRaster(raster.data$Kaol.RF, filename = "Predicted Kaol L8&DEM.tiff", format = "GTiff",
             overwrite = TRUE, datatype = "FLT4S")
+#-----------------------------------------------------------------------------#
+# models fitting with "ranger" package
+# derivation of RF uncertainty (maps) for regression (from GeoMLA repo, T. Hengl & M. Wright)
+quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
+# to estimate also the prediction error variance i.e. prediction intervals we set
+# "quantreg = TRUE" which initiates the Quantile Regression RF approach:
+SOC.qrf <- ranger(formulaString1,
+                  reg.matrix,
+                  num.trees=500,
+                  importance = "impurity",
+                  seed = 1,
+                  quantreg = TRUE)
+# results
+SOC.qrf
+xl <- as.list(ranger::importance(SOC.qrf))
+print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
+# fit model without QRF
+SOC.qrf0 <- ranger(formulaString1,
+                   reg.matrix,
+                   num.trees=500,
+                   importance = "impurity",
+                   seed = 1,
+                   quantreg = FALSE)
+SOC.qrf0
+pred.SOC.qrf <- predict(SOC.qrf, data.grid@data, type="quantiles", quantiles=quantiles)$predictions
+# This predicts the "median" value; to predict "mean" using ranger without "quantreg = TRUE
+data.grid$SOC_pred <- pred.SOC.qrf[, 2] # median value
+data.grid$SOC_pred_U <- pred.SOC.qrf[, 3] # upper quantile
+data.grid$SOC_pred_L <- pred.SOC.qrf[, 1] # lower quantile
+data.grid$SOC_pred0 <- predict(SOC.qrf0, data.grid@data)$predictions
+summary(data.grid$SOC_pred0); summary(data.grid$SOC_pred)
+hexbin::hexbinplot(data.grid$SOC_pred0 ~ data.grid$SOC_pred)
+# Prediction error s.d.:
+data.grid$SOC_pred_range <- (pred.SOC.qrf[, 3] - pred.SOC.qrf[, 1])/2
+summary(data.grid$SOC_pred_range)
+hist(data.grid$SOC_pred_range)
+spplot(data.grid[c("SOC_pred_L","SOC_pred", "SOC_pred_U")],
+       col.regions = SAGA_pal[[3]],
+       # scales = list(draw = T),
+       names.attr = c("Lower quantile", "Random Forest (RF)","Upper quantile"))
+#-----------------------------------------------------------------------------#
+# since no other covariates are available, we use only geographical (buffer) distances to
+# observation points. We first derive buffer distances for each individual point:
+grid.dist0 <- GSIF::buffer.dist(data["SOC"], data.grid[1], as.factor(1:nrow(data)))
+# which derives a raster map for each observation point. The spatial prediction model is defined as:
+dn0 <- paste(names(grid.dist0), collapse="+")
+fm0 <- as.formula(paste("SOC ~ ", dn0))
+# i.e., in the formulazinc ~ layer.1 + layer.2 + ... + layer.22 which means that the target 
+# variable is a function of 22 covariates. Next, we overlay points and covariates to create a
+# regression matrix, so that we can tune and fit arangermodel, and generate predictions:
+overlay <- over(data["SOC"], grid.dist0)
+reg.matrix <- cbind(data@data["SOC"], overlay)
+# "quantreg=TRUE" allows to derive the lower and upper quantiles i.e. standard error of the predictions
+SOC.qrf0 <- ranger(fm0,
+                  reg.matrix,
+                  num.trees=150,
+                  importance = "impurity",
+                  seed = 1,
+                  quantreg = TRUE)
+SOC.qrf0
+# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 32 %
+# of the variation in the response
+
+# next, we fit the model using both thematic covariates and buffer distances:
+fm1 <- as.formula(paste("SOC ~ ", dn0, "+", paste(names(data.grid[, 45:60]), collapse = "+")))
+overlay1 <- over(data["SOC"], data.grid[, 45:60])
+reg.matrix1 <- cbind(data@data["SOC"], overlay, overlay1)
+SOC.qrf1 <- ranger(fm1,
+                   reg.matrix1,
+                   num.trees=150,
+                   importance = "impurity",
+                   seed = 1,
+                   quantreg = TRUE)
+
+SOC.qrf1
+# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 41 %
+# of the variation in the response. RFsp including additional covariates results in somewhat smaller
+# MSE than RFsp with buffer distances only. Nevertheless, it seems that buffer distances are most
+# important for mapping zinc i.e. more important than remote sensing data and elevation for producing the final predictions.
+xl <- as.list(ranger::importance(SOC.qrf1))
+print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
