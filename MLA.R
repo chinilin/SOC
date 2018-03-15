@@ -325,7 +325,7 @@ quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
 # "quantreg = TRUE" which initiates the Quantile Regression RF approach:
 SOC.qrf <- ranger(formulaString1,
                   reg.matrix,
-                  num.trees=500,
+                  num.trees = 150,
                   importance = "impurity",
                   seed = 1,
                   quantreg = TRUE)
@@ -336,7 +336,7 @@ print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
 # fit model without QRF
 SOC.qrf0 <- ranger(formulaString1,
                    reg.matrix,
-                   num.trees=500,
+                   num.trees = 150,
                    importance = "impurity",
                    seed = 1,
                    quantreg = FALSE)
@@ -362,39 +362,72 @@ spplot(data.grid[c("SOC_pred_L","SOC_pred", "SOC_pred_U")],
 # observation points. We first derive buffer distances for each individual point:
 grid.dist0 <- GSIF::buffer.dist(data["SOC"], data.grid[1], as.factor(1:nrow(data)))
 # which derives a raster map for each observation point. The spatial prediction model is defined as:
-dn0 <- paste(names(grid.dist0), collapse="+")
+dn0 <- paste(names(grid.dist0), collapse = "+")
 fm0 <- as.formula(paste("SOC ~ ", dn0))
 # i.e., in the formulazinc ~ layer.1 + layer.2 + ... + layer.22 which means that the target 
 # variable is a function of 22 covariates. Next, we overlay points and covariates to create a
-# regression matrix, so that we can tune and fit arangermodel, and generate predictions:
+# regression matrix, so that we can tune and fit a ranger model, and generate predictions:
 overlay <- over(data["SOC"], grid.dist0)
 reg.matrix <- cbind(data@data["SOC"], overlay)
 # "quantreg=TRUE" allows to derive the lower and upper quantiles i.e. standard error of the predictions
 SOC.qrf0 <- ranger(fm0,
                   reg.matrix,
-                  num.trees=150,
+                  num.trees = 500,
                   importance = "impurity",
                   seed = 1,
                   quantreg = TRUE)
 SOC.qrf0
-# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 32 %
+# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 35 %
 # of the variation in the response
 
 # next, we fit the model using both thematic covariates and buffer distances:
-fm1 <- as.formula(paste("SOC ~ ", dn0, "+", paste(names(data.grid[, 45:60]), collapse = "+")))
-overlay1 <- over(data["SOC"], data.grid[, 45:60])
+fm1 <- as.formula(paste("SOC ~ ", dn0, "+", paste(names(data.grid[, c(36,37,42,45:60)]), collapse = "+")))
+overlay1 <- over(data["SOC"], data.grid[, c(36,37,42,45:60)])
 reg.matrix1 <- cbind(data@data["SOC"], overlay, overlay1)
 SOC.qrf1 <- ranger(fm1,
                    reg.matrix1,
-                   num.trees=150,
+                   num.trees = 500,
                    importance = "impurity",
                    seed = 1,
                    quantreg = TRUE)
 
 SOC.qrf1
-# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 41 %
+# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 44 %
 # of the variation in the response. RFsp including additional covariates results in somewhat smaller
 # MSE than RFsp with buffer distances only. Nevertheless, it seems that buffer distances are most
 # important for mapping zinc i.e. more important than remote sensing data and elevation for producing the final predictions.
 xl <- as.list(ranger::importance(SOC.qrf1))
 print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
+#-----------------------------------------------------------------------------#
+# Models fitting (with "caret" package)
+# RF
+ctrl1 <- trainControl(method = "repeatedcv", number = 5, repeats = 10, allowParallel = TRUE) # 5-fold CV
+rf.tuneGrid <- expand.grid(mtry = seq(1, 38, by = 1))
+set.seed(1234)
+SOC.rf <- train(fm1, # buffer distance + covariates
+                data = reg.matrix1,
+                method = "rf",
+                tuneGrid = rf.tuneGrid,
+                trControl = ctrl1,
+                importance = TRUE,
+                preProcess = c("center", "scale"))
+SOC.rf # R squared about 0,7
+w1 <- min(SOC.rf$results$RMSE)
+plot(varImp(object = SOC.rf), main = "RF - Variable Importance",
+     top = 20, ylab = "Variable")
+data.grid$SOC.rf <- predict(SOC.rf, cbind(grid.dist0@data, data.grid@data))
+
+points <- list("sp.points", data, pch = "+", cex = 2, col = "red")
+scale <- list("SpatialPolygonsRescale", layout.scale.bar(),
+              offset = c(565300,5592250), scale = 500, fill = c("transparent","black"))
+text1 <- list("sp.text", c(565300,5592310), "0")
+text2 <- list("sp.text", c(565800,5592310), "500 m")
+arrow <- list("SpatialPolygonsRescale", layout.north.arrow(), 
+              offset = c(566750,5593650), scale = 250)
+spplot(data.grid["SOC.rf"],
+       col.regions = R_pal[["soc_pal"]],
+       # scales = list(draw = T),
+       sp.layout = list(#area,
+         points, scale, text1, text2, arrow),
+       main = "Predicted SOC content (buffer distanse + covariates), %")
+#-----------------------------------------------------------------------------#
