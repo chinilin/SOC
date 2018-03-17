@@ -341,7 +341,7 @@ SOC.qrf0 <- ranger(formulaString1,
                    seed = 1,
                    quantreg = FALSE)
 SOC.qrf0
-pred.SOC.qrf <- predict(SOC.qrf, data.grid@data, type="quantiles", quantiles=quantiles)$predictions
+pred.SOC.qrf <- predict(SOC.qrf, data.grid@data, type = "quantiles", quantiles = quantiles)$predictions
 # This predicts the "median" value; to predict "mean" using ranger without "quantreg = TRUE
 data.grid$SOC_pred <- pred.SOC.qrf[, 2] # median value
 data.grid$SOC_pred_U <- pred.SOC.qrf[, 3] # upper quantile
@@ -392,7 +392,7 @@ SOC.qrf1 <- ranger(fm1,
                    quantreg = TRUE)
 
 SOC.qrf1
-# The out-of-bag validation R squared (OOB), indicates that the buffer distances explain about 44 %
+# The out-of-bag validation R squared (OOB), indicates that the buffer distances + covariates explain about 44 %
 # of the variation in the response. RFsp including additional covariates results in somewhat smaller
 # MSE than RFsp with buffer distances only. Nevertheless, it seems that buffer distances are most
 # important for mapping SOC i.e. more important than remote sensing data and elevation for producing the final predictions.
@@ -419,7 +419,7 @@ data.grid$SOC.rf0 <- predict(SOC.rf0, cbind(grid.dist0@data, data.grid@data))
 # fit the model only using buffer distance as covariates
 rf.tuneGrid1 <- expand.grid(mtry = seq(1, 22, by = 1))
 SOC.rf1 <- train(fm0, # buffer distance
-                 data = reg.matrix,
+                 data = reg.matrix1,
                  method = "rf",
                  tuneGrid = rf.tuneGrid1,
                  trControl = ctrl1,
