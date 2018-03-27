@@ -12,6 +12,7 @@ library(caret)
 library(bartMachine)
 library(maptools)
 library(ranger)
+library(rgdal)
 
 # load and prepare the data set which consists of soil profiles and stack of rasters containing all covariates:
 crs = CRS('+init=epsg:32637')
@@ -112,7 +113,7 @@ reg.matrix <- cbind(overlay, data.minerals@data)
 dim(reg.matrix)
 #-----------------------------------------------------------------------------#
 # on L8 bands, spectral indices & dem derivatives
-formulaString1 <- SOC ~ L8b2_mean + L8b3_mean + L8b4_mean + 
+formulaString1 <- Kaol ~ L8b2_mean + L8b3_mean + L8b4_mean + 
   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
   GB_mean + GR_mean + GNIR_mean + RB_mean + 
   RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
@@ -157,15 +158,15 @@ ranger.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1),
                                splitrule = c("extratrees", "variance", "maxstat"),
                                min.node.size = 5)
 set.seed(1234)
-SOC.rf <- train(formulaString1, # can change formulastring
+Kaol.rf <- train(formulaString4, # can change formulastring
                 data = reg.matrix,
                 method = "rf", # or "ranger"
                 tuneGrid = rf.tuneGrid,
                 trControl = ctrl1,
                 importance = TRUE,
                 preProcess = c("center", "scale")) # "pca"
-w1 <- min(SOC.rf$results$RMSE)
-plot(varImp(object = SOC.rf), main = "RF - Variable Importance",
+w1 <- min(Kaol.rf$results$RMSE)
+plot(varImp(object = Kaol.rf), main = "RF - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # XGBoost
@@ -175,13 +176,13 @@ gb.tuneGrid <- expand.grid(eta = c(0.3,0.4,0.5,0.6),
                            colsample_bytree = 0.8, min_child_weight = 1,
                            subsample = 1)
 set.seed(1234)
-SOC.xgb <- train(formulaString1, data = reg.matrix,
+Kaol.xgb <- train(formulaString4, data = reg.matrix,
                  method = "xgbTree",
                  tuneGrid = gb.tuneGrid,
                  trControl = ctrl1,
                  preProcess = c("center", "scale"))
-w2 <- min(SOC.xgb$results$RMSE)
-plot(varImp(object = SOC.xgb), main = "XGBoost - Variable Importance",
+w2 <- min(Kaol.xgb$results$RMSE)
+plot(varImp(object = Kaol.xgb), main = "XGBoost - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # bartMachine (Bayesian Additive Regression Trees)
@@ -189,14 +190,14 @@ bm.tuneGrid <- expand.grid(num_trees = c(20,50,80,110),
                            k = 2, alpha = .95,
                            beta = 2, nu = 3)
 set.seed(1234)
-SOC.bm <- train(formulaString1, data = reg.matrix,
+Kaol.bm <- train(formulaString4, data = reg.matrix,
                 method = "bartMachine",
                 tuneGrid = bm.tuneGrid,
                 trControl = ctrl1,
                 preProcess = c("center", "scale"),
                 verbose = F)
-w3 <- min(SOC.bm$results$RMSE)
-plot(varImp(object = SOC.bm), main = "BART - Variable Importance",
+w3 <- min(Kaol.bm$results$RMSE)
+plot(varImp(object = Kaol.bm), main = "BART - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # the same using the "Cubist" package:
@@ -251,7 +252,7 @@ data.grid$Klin.Cubist <- predict(Klin.cb, data.grid@data, na.action = na.pass)
 # final prediction as weighted average:
 data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.bartMachine*w3)/(w1+w2+w3)
 data.grid$Kaol.WA <- (data.grid$Kaol.RF*w1+data.grid$Kaol.XGBoost*w2+data.grid$Kaol.bartMachine*w3)/(w1+w2+w3)
-data.grid$Sm.WA <- (data.grid$Sm.RF*w1+data.grid$Sm.bartMachine*w3)/(w1+w3)
+data.grid$Sm.WA <- (data.grid$Sm.RF*w1+data.grid$Sm.XGBoost*w2+data.grid$Sm.bartMachine*w3)/(w1+w2+w3)
 plot((stack(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Kaol.RF", "Kaol.bartMachine", "Kaol.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Sm.RF", "Sm.bartMachine", "Sm.WA")])), col=SAGA_pal[[1]])
@@ -292,12 +293,20 @@ spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")],
 #-----------------------------------------------------------------------------#
 # for minerals content predictions
 spplot(data.grid[c("Kaol.RF", "Kaol.XGBoost", "Kaol.bartMachine", "Kaol.WA")],
-       col.regions = SAGA_pal[[3]],
+       col.regions = SAGA_pal[[1]],
        # scales = list(draw = T),
        names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
        sp.layout = list(#area,
          points, scale, text1, text2, arrow),
        main = "Predicted Kaolinite content, %")
+#-----------------------------------------------------------------------------#
+spplot(data.grid[c("Sm.RF", "Sm.XGBoost", "Sm.bartMachine", "Sm.WA")],
+       col.regions = SAGA_pal[[1]],
+       # scales = list(draw = T),
+       names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
+       sp.layout = list(#area,
+         points, scale, text1, text2, arrow),
+       main = "Predicted Smektite content, %")
 #-----------------------------------------------------------------------------#
 require(gridExtra)
 grid.arrange(spplot(data.grid["Kaol.RF"], col.regions = SAGA_pal[[1]],
@@ -309,14 +318,44 @@ spplot(data.grid["Sm.RF"], col.regions = SAGA_pal[[1]],
 ncol = 2, nrow = 1)
 #-----------------------------------------------------------------------------#
 # save as .png with 300 dpi
-png("Predicted SOC L8&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
-png("Predicted SOC S2&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
+png("Predicted Kaol L8&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
+png("Predicted Kaol S2&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
 tiff("Predicted SOC L8&DEM.tif", width = 3200, height = 1800, units = 'px', res = 300)
 dev.off()
 
 raster.data <- stack(data.grid)
-writeRaster(raster.data$Kaol.RF, filename = "Predicted Kaol L8&DEM.tiff", format = "GTiff",
+save(raster.data, file = "raster_data.Rdata")
+writeRaster(raster.data$Sm.WA, filename = "Predicted Sm_WA S2&DEM.tif", format = "GTiff",
             overwrite = TRUE, datatype = "FLT4S")
+writeRaster(raster.data$Kaol.RF, filename = "Predicted Kaol_RF S2&DEM.tif", format = "GTiff",
+            overwrite = TRUE, datatype = "FLT4S")
+#-----------------------------------------------------------------------------#
+# NOT RUN
+library(maptools)
+contours <- readShapeLines("Isolines.shp")
+library(raster)
+library(rasterVis)
+pm_rf <- raster("PM_RF.tif") # predicted with Random Forest
+pm_wa <- raster("PM_WA.tif") # weighted average
+pm_rf <- as.factor(pm_rf)
+pm_wa <- as.factor(pm_wa)
+rat0 <- levels(pm_rf)[[1]]
+rat1 <- levels(pm_wa)[[1]]
+rat1[["pm"]] <- c("Неоген. песч. отл. (40-80 см)",
+                 "Неоген. глин. отл. (150-200 см)",
+                 "Покровные отложения")
+levels(pm_rf) <- rat0
+levels(pm_wa) <- rat1
+print(
+levelplot(pm_wa, col.regions = SAGA_pal[[1]])
++ layer(sp.lines(contours, col = 'dimgrey', alpha = 0.75, lwd = 0.75)))
+#-----------------------------------------------------------------------------#
+require(gridExtra)
+grid.arrange(levelplot(pm_rf, col.regions = SAGA_pal[[1]], main = "Random Forest",
+                       scales = list(draw = F)),
+             levelplot(pm_wa, col.regions = SAGA_pal[[1]], main = "Weighted average",
+                       scales = list(draw = F)),
+             ncol = 2, nrow = 1)
 #-----------------------------------------------------------------------------#
 # models fitting with "ranger" package
 # derivation of RF uncertainty (maps) for regression (from GeoMLA repo, T. Hengl & M. Wright)
