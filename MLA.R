@@ -113,27 +113,27 @@ reg.matrix <- cbind(overlay, data.minerals@data)
 dim(reg.matrix)
 #-----------------------------------------------------------------------------#
 # on L8 bands, spectral indices & dem derivatives
-formulaString1 <- Kaol ~ L8b2_mean + L8b3_mean + L8b4_mean + 
+formulaString1 <- SOC ~ L8b2_mean + L8b3_mean + L8b4_mean + 
   L8b5_mean + BG_mean + BR_mean + BNIR_mean + 
   GB_mean + GR_mean + GNIR_mean + RB_mean + 
   RG_mean + RNIR_mean + NIRB_mean + NIRG_mean + 
   NIRR_mean + FA + TWI + SLP
 # on L8 band (MART 2014), spectral indices & dem derivatives
-formulaString2 <- Kaol ~ L8b2_24MART2014 + L8b3_24MART2014 + L8b4_24MART2014 +
+formulaString2 <- SOC ~ L8b2_24MART2014 + L8b3_24MART2014 + L8b4_24MART2014 +
   L8b5_24MART2014 + BG_24MART2014 + BR_24MART2014 + BNIR_24MART2014 + 
   GB_24MART2014 + GR_24MART2014 + GNIR_24MART2014 +
   RB_24MART2014 + RG_24MART2014 + RNIR_24MART2014 + 
   NIRR_24MART2014 + NIRG_24MART2014 + NIRR_24MART2014 + 
   FA + TWI + SLP
 # on L8 band (APR 2014), spectral indices & dem derivatives
-formulaString3 <- Kaol ~ L8b2_25APR2014 + L8b3_25APR2014 + L8b4_25APR2014 +
+formulaString3 <- SOC ~ L8b2_25APR2014 + L8b3_25APR2014 + L8b4_25APR2014 +
   L8b5_25APR2014 + BG_25APR2014 + BR_25APR2014 + BNIR_25APR2014 + 
   GB_25APR2014 + GR_25APR2014 + GNIR_25APR2014 +
   RB_25APR2014 + RG_25APR2014 + RNIR_25APR2014 + 
   NIRR_25APR2014 + NIRG_25APR2014 + NIRR_25APR2014 +
   FA + TWI + SLP
 # on S2 SR bands, spectral indices & dem derivatives
-formulaString4 <- Kaol ~ S2_B02_20160409 + S2_B03_20160409 + 
+formulaString4 <- SOC ~ S2_B02_20160409 + S2_B03_20160409 + 
   S2_B04_20160409 + S2_B08_20160409 + BG_20160409 + 
   BR_20160409 + BNIR_20160409 + GB_20160409 + 
   GR_20160409 + GNIR_20160409 + RB_20160409 + 
@@ -158,16 +158,19 @@ ranger.tuneGrid <- expand.grid(mtry = seq(1, 19, by = 1),
                                splitrule = c("extratrees", "variance", "maxstat"),
                                min.node.size = 5)
 set.seed(1234)
-Kaol.rf <- train(formulaString4, # can change formulastring
+SOC.rf <- train(formulaString1, # can change formulastring
                 data = reg.matrix,
                 method = "rf", # or "ranger"
                 tuneGrid = rf.tuneGrid,
                 trControl = ctrl1,
                 importance = TRUE,
                 preProcess = c("center", "scale")) # "pca"
-w1 <- min(Kaol.rf$results$RMSE)
-plot(varImp(object = Kaol.rf), main = "RF - Variable Importance",
+w1 <- min(SOC.rf$results$RMSE)
+plot(varImp(object = SOC.rf), main = "RF - Variable Importance",
      top = 10, ylab = "Variable")
+plot(SOC.rf$finalModel$y, SOC.rf$finalModel$predicted,
+     main = "CV R-squared: 0.58", xlab = "Наблюдаемые", ylab = "Предсказанные", pch = 16)
+abline(0,1, col = "red", lwd = 2)
 #-----------------------------------------------------------------------------#
 # XGBoost
 gb.tuneGrid <- expand.grid(eta = c(0.3,0.4,0.5,0.6),
@@ -176,13 +179,13 @@ gb.tuneGrid <- expand.grid(eta = c(0.3,0.4,0.5,0.6),
                            colsample_bytree = 0.8, min_child_weight = 1,
                            subsample = 1)
 set.seed(1234)
-Kaol.xgb <- train(formulaString4, data = reg.matrix,
+SOC.xgb <- train(formulaString1, data = reg.matrix,
                  method = "xgbTree",
                  tuneGrid = gb.tuneGrid,
                  trControl = ctrl1,
                  preProcess = c("center", "scale"))
-w2 <- min(Kaol.xgb$results$RMSE)
-plot(varImp(object = Kaol.xgb), main = "XGBoost - Variable Importance",
+w2 <- min(SOC.xgb$results$RMSE)
+plot(varImp(object = SOC.xgb), main = "XGBoost - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # bartMachine (Bayesian Additive Regression Trees)
@@ -190,14 +193,14 @@ bm.tuneGrid <- expand.grid(num_trees = c(20,50,80,110),
                            k = 2, alpha = .95,
                            beta = 2, nu = 3)
 set.seed(1234)
-Kaol.bm <- train(formulaString4, data = reg.matrix,
+SOC.bm <- train(formulaString1, data = reg.matrix,
                 method = "bartMachine",
                 tuneGrid = bm.tuneGrid,
                 trControl = ctrl1,
                 preProcess = c("center", "scale"),
                 verbose = F)
-w3 <- min(Kaol.bm$results$RMSE)
-plot(varImp(object = Kaol.bm), main = "BART - Variable Importance",
+w3 <- min(SOC.bm$results$RMSE)
+plot(varImp(object = SOC.bm), main = "BART - Variable Importance",
      top = 10, ylab = "Variable")
 #-----------------------------------------------------------------------------#
 # the same using the "Cubist" package:
@@ -208,7 +211,7 @@ SOC.cb <- train(formulaString1,
                 tuneGrid = expand.grid(committees = c(1:15),
                                      neighbors = c(5,7,9)),
                 trControl = ctrl1,
-                preProcess = "pca")
+                preProcess = c("center", "scale"))
 w4 <- min(SOC.cb$results$RMSE)
 plot(varImp(object = SOC.cb), main = "Cubist - Variable Importance",
      top = 4, ylab = "Variable")
@@ -250,10 +253,10 @@ data.grid$Klin.bartMachine <- predict(Klin.bm, data.grid@data, na.action = na.pa
 data.grid$Klin.Cubist <- predict(Klin.cb, data.grid@data, na.action = na.pass)
 
 # final prediction as weighted average:
-data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.bartMachine*w3)/(w1+w2+w3)
+data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.bartMachine*w3+data.grid$SOC.Cubist*w4)/(w1+w2+w3+w4)
 data.grid$Kaol.WA <- (data.grid$Kaol.RF*w1+data.grid$Kaol.XGBoost*w2+data.grid$Kaol.bartMachine*w3)/(w1+w2+w3)
 data.grid$Sm.WA <- (data.grid$Sm.RF*w1+data.grid$Sm.XGBoost*w2+data.grid$Sm.bartMachine*w3)/(w1+w2+w3)
-plot((stack(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")])), col=SAGA_pal[[1]])
+plot((stack(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.Cubist", "SOC.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Kaol.RF", "Kaol.bartMachine", "Kaol.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Sm.RF", "Sm.bartMachine", "Sm.WA")])), col=SAGA_pal[[1]])
 #-----------------------------------------------------------------------------#
@@ -283,13 +286,13 @@ text2 <- list("sp.text", c(565800,5592310), "500 m")
 arrow <- list("SpatialPolygonsRescale", layout.north.arrow(), 
               offset = c(566750,5593650), scale = 250)
 # for SOC predictions
-spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")],
+spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.Cubist", "SOC.WA")],
        col.regions = R_pal[["soc_pal"]],
        # scales = list(draw = T),
-       names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
+       names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Cubist", "Weighted average"),
        sp.layout = list(#area,
                       points, scale, text1, text2, arrow),
-       main = "Predicted soil organic carbon content, %")
+       main = "Predicted SOC content, %")
 #-----------------------------------------------------------------------------#
 # for minerals content predictions
 spplot(data.grid[c("Kaol.RF", "Kaol.XGBoost", "Kaol.bartMachine", "Kaol.WA")],
