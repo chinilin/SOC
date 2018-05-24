@@ -41,7 +41,8 @@ data.grid@proj4string <- crs
 # NOT RUN
 # lets see a correlation plot between predictors & response variable
 library(corrplot)
-cor <- data.grid[, -c(1:37,40:43,45:46)]
+cor <- data.grid[, -c(1:37,40:43,45:46)] # for L8mean & DEM
+cor <- data.grid[, -c(1:2,19,21:23,26:32)] # for S2 & DEM
 m <- cor(cor)
 corrplot(m, method = "number")
 corrplot(m, method = "color")
@@ -50,7 +51,8 @@ corrplot(m, method = "circle")
 
 # correlation matrices
 library(PerformanceAnalytics)
-chart.Correlation(data.grid[, 47:62], histogram = TRUE, pch = 19) # some example
+chart.Correlation(data.grid[, -c(1:37,40:43,45:46)], # some example
+                  histogram = TRUE, pch = 19)
 #-----------------------------------------------------------------------------#
 # plot using Leaflet:
 library(leaflet)
@@ -62,7 +64,7 @@ leaflet() %>%
   addLegend(pal = pal, values = values(r), title = "Elevation, m")
 #-----------------------------------------------------------------------------#
 # NOT RUN
-# According Hengl T.(http://gsif.isric.org/doku.php), it is also probably a good idea to convert all covariates to independent
+# According to Hengl T.(http://gsif.isric.org/doku.php), it is also probably a good idea to convert all covariates to independent
 # components. This way, it will be easier to subset to the optimal number of
 # predictors during the analysis. Principal component analysis (PCA) helps reducing the prediction
 # bias, which might happen if the covariates are cross-correlated. A wrapper
@@ -166,10 +168,11 @@ SOC.rf <- train(formulaString1, # can change formulastring
                 importance = TRUE,
                 preProcess = c("center", "scale")) # "pca"
 w1 <- min(SOC.rf$results$RMSE)
-plot(varImp(object = SOC.rf), main = "RF - Variable Importance",
-     top = 10, ylab = "Variable")
+plot(varImp(object = SOC.rf), # main = "RF - Variable Importance",
+     top = 15, ylab = "Переменная", xlab = "Значимость")
+png("SOC Importance RF.png", width = 1920, height = 1080, units = 'px', res = 300)
 plot(SOC.rf$finalModel$y, SOC.rf$finalModel$predicted,
-     main = "CV R-squared: 0.58", xlab = "Наблюдаемые", ylab = "Предсказанные", pch = 16)
+     main = "CV R-squared: ", xlab = "Наблюдаемые", ylab = "Предсказанные", pch = 16)
 abline(0,1, col = "red", lwd = 2)
 #-----------------------------------------------------------------------------#
 # XGBoost
@@ -185,8 +188,8 @@ SOC.xgb <- train(formulaString1, data = reg.matrix,
                  trControl = ctrl1,
                  preProcess = c("center", "scale"))
 w2 <- min(SOC.xgb$results$RMSE)
-plot(varImp(object = SOC.xgb), main = "XGBoost - Variable Importance",
-     top = 10, ylab = "Variable")
+plot(varImp(object = SOC.xgb), # main = "XGBoost - Variable Importance",
+     top = 15, ylab = "Переменная", xlab = "Значимость")
 #-----------------------------------------------------------------------------#
 # bartMachine (Bayesian Additive Regression Trees)
 bm.tuneGrid <- expand.grid(num_trees = c(20,50,80,110),
@@ -198,10 +201,11 @@ SOC.bm <- train(formulaString1, data = reg.matrix,
                 tuneGrid = bm.tuneGrid,
                 trControl = ctrl1,
                 preProcess = c("center", "scale"),
-                verbose = F)
+                verbose = F,
+                serialize = T)
 w3 <- min(SOC.bm$results$RMSE)
-plot(varImp(object = SOC.bm), main = "BART - Variable Importance",
-     top = 10, ylab = "Variable")
+plot(varImp(object = SOC.bm), # main = "BART - Variable Importance",
+     top = 15, ylab = "Переменная", xlab = "Значимость")
 #-----------------------------------------------------------------------------#
 # the same using the "Cubist" package:
 set.seed(1234)
@@ -216,16 +220,28 @@ w4 <- min(SOC.cb$results$RMSE)
 plot(varImp(object = SOC.cb), main = "Cubist - Variable Importance",
      top = 4, ylab = "Variable")
 #-----------------------------------------------------------------------------#
+require(gridExtra)
+grid.arrange(plot(varImp(object = SOC.rf), # main = "RF - Variable Importance"
+                  top = 15, ylab = "Переменная", xlab = "Значимость"),
+             plot(varImp(object = SOC.xgb), # main = "XGBoost - Variable Importance"
+                  top = 15, ylab = "Переменная", xlab = "Значимость"),
+             plot(varImp(object = SOC.bm), # main = "Bart Machine - Variable Importance"
+                  top = 15, ylab = "Переменная", xlab = "Значимость"),
+             ncol = 3, nrow = 1)
+png("SOC_Importance_.png", width = 3200, height = 1800, units = 'px', res = 300)
+dev.off()
+#-----------------------------------------------------------------------------#
 # compare perfomance
 # if we use "ctrl1" or "ctrl2" in "trControl" parametres
-model_list <- list(RF = SOC.rf, XGBoost = SOC.xgb, BART = SOC.bm, Cubist = SOC.cb)
-model_list <- list(RF = Kaol.rf, XGBoost = Kaol.xgb, BART = Kaol.bm)
+model_list <- list(RF = SOC.rf, XGBoost = SOC.xgb, BART = SOC.bm) # for SOC
+model_list <- list(RF = Kaol.rf, XGBoost = Kaol.xgb, BART = Kaol.bm) # for minerals content
 results <- resamples(model_list)
 summary(results)
 # boxplot comparing results
-bwplot(results, layout = c(3, 1)) # RMSE, MSE and R-squared
+bwplot(results, layout = c(3, 1)) # RMSE, MAE and R-squared
 bwplot(results, metric = "Rsquared", main = "Algorithms accuracy comparing")
 bwplot(results, metric = "RMSE", main = "Algorithms accuracy comparing")
+png("summary_results.png", width = 3200, height = 1800, units = 'px', res = 300)
 #-----------------------------------------------------------------------------#
 # Ensemble prediction:
 # SOC (best models: RF, XGBoost & BART with close RMSE & Rsquared)
@@ -253,12 +269,15 @@ data.grid$Klin.bartMachine <- predict(Klin.bm, data.grid@data, na.action = na.pa
 data.grid$Klin.Cubist <- predict(Klin.cb, data.grid@data, na.action = na.pass)
 
 # final prediction as weighted average:
-data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.bartMachine*w3+data.grid$SOC.Cubist*w4)/(w1+w2+w3+w4)
+data.grid$SOC.WA <- (data.grid$SOC.RF*w1+data.grid$SOC.XGBoost*w2+data.grid$SOC.bartMachine*w3)/(w1+w2+w3)
 data.grid$Kaol.WA <- (data.grid$Kaol.RF*w1+data.grid$Kaol.XGBoost*w2+data.grid$Kaol.bartMachine*w3)/(w1+w2+w3)
 data.grid$Sm.WA <- (data.grid$Sm.RF*w1+data.grid$Sm.XGBoost*w2+data.grid$Sm.bartMachine*w3)/(w1+w2+w3)
 plot((stack(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.Cubist", "SOC.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Kaol.RF", "Kaol.bartMachine", "Kaol.WA")])), col=SAGA_pal[[1]])
 plot((stack(data.grid[c("Sm.RF", "Sm.bartMachine", "Sm.WA")])), col=SAGA_pal[[1]])
+#-----------------------------------------------------------------------------#
+# save as .RDA
+save(data.grid, SOC.rf, SOC.xgb, SOC.bm, results, file = "SOC_.rda")
 #-----------------------------------------------------------------------------#
 # plot using Leaflet:
 library(leaflet)
@@ -273,7 +292,8 @@ plotKML(data.grid["SOC.WA"], colour_scale = R_pal[["soc_pal"]])
 #-----------------------------------------------------------------------------#
 # plot in GoogleMaps:
 library(plotGoogleMaps)
-mp <- plotGoogleMaps(data.grid, filename='SOC.html', zcol='SOC.WA', add=TRUE, colPalette=SAGA_pal[[1]])
+mp <- plotGoogleMaps(data.grid, filename = "SOC.html", zcol = "SOC.WA",
+                     add = TRUE, colPalette = R_pal[["soc_pal"]])
 #-----------------------------------------------------------------------------#
 # or use spplot
 # studarea <- readShapePoly("Fields.shp")
@@ -286,11 +306,11 @@ text2 <- list("sp.text", c(565800,5592310), "500 m")
 arrow <- list("SpatialPolygonsRescale", layout.north.arrow(), 
               offset = c(566750,5593650), scale = 250)
 # for SOC predictions
-spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.Cubist", "SOC.WA")],
+spplot(data.grid[c("SOC.RF", "SOC.XGBoost", "SOC.bartMachine", "SOC.WA")],
        col.regions = R_pal[["soc_pal"]],
        # scales = list(draw = T),
-       names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Cubist", "Weighted average"),
-       sp.layout = list(#area,
+       names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
+       sp.layout = list(# area,
                       points, scale, text1, text2, arrow),
        main = "Predicted SOC content, %")
 #-----------------------------------------------------------------------------#
@@ -299,16 +319,16 @@ spplot(data.grid[c("Kaol.RF", "Kaol.XGBoost", "Kaol.bartMachine", "Kaol.WA")],
        col.regions = SAGA_pal[[1]],
        # scales = list(draw = T),
        names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
-       sp.layout = list(#area,
-         points, scale, text1, text2, arrow),
+       sp.layout = list(# area, points,
+         scale, text1, text2, arrow),
        main = "Predicted Kaolinite content, %")
 #-----------------------------------------------------------------------------#
 spplot(data.grid[c("Sm.RF", "Sm.XGBoost", "Sm.bartMachine", "Sm.WA")],
        col.regions = SAGA_pal[[1]],
        # scales = list(draw = T),
        names.attr = c("Random Forest","Gradient Boosting Machine", "BART", "Weighted average"),
-       sp.layout = list(#area,
-         points, scale, text1, text2, arrow),
+       sp.layout = list(# area, points,
+         scale, text1, text2, arrow),
        main = "Predicted Smektite content, %")
 #-----------------------------------------------------------------------------#
 require(gridExtra)
@@ -321,16 +341,16 @@ spplot(data.grid["Sm.RF"], col.regions = SAGA_pal[[1]],
 ncol = 2, nrow = 1)
 #-----------------------------------------------------------------------------#
 # save as .png with 300 dpi
-png("Predicted Kaol L8&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
-png("Predicted Kaol S2&DEM.png", width = 3200, height = 1800, units = 'px', res = 300)
-tiff("Predicted SOC L8&DEM.tif", width = 3200, height = 1800, units = 'px', res = 300)
+png("_.png", width = 4096, height = 2160, units = 'px', res = 300)
+png("_.png", width = 3200, height = 1800, units = 'px', res = 300)
+tiff("_.tif", width = 3200, height = 1800, units = 'px', res = 300)
 dev.off()
 
 raster.data <- stack(data.grid)
 save(raster.data, file = "raster_data.Rdata")
-writeRaster(raster.data$Sm.WA, filename = "Predicted Sm_WA S2&DEM.tif", format = "GTiff",
+writeRaster(raster.data$Kaol.RF, filename = "Predicted Kaol_.tif", format = "GTiff",
             overwrite = TRUE, datatype = "FLT4S")
-writeRaster(raster.data$Kaol.RF, filename = "Predicted Kaol_RF S2&DEM.tif", format = "GTiff",
+writeRaster(raster.data$Kaol.WA, filename = "Predicted Kaol_.tif", format = "GTiff",
             overwrite = TRUE, datatype = "FLT4S")
 #-----------------------------------------------------------------------------#
 # NOT RUN
