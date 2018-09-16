@@ -13,6 +13,7 @@ library(bartMachine)
 library(maptools)
 library(ranger)
 library(rgdal)
+library(doParallel)
 
 # load and prepare the data set which consists of soil profiles and stack of rasters containing all covariates:
 crs = CRS('+init=epsg:32637')
@@ -355,22 +356,22 @@ writeRaster(raster.data$Kaol.WA, filename = "Predicted Kaol_.tif", format = "GTi
 #-----------------------------------------------------------------------------#
 # NOT RUN
 library(maptools)
-contours <- readShapeLines("Isolines.shp")
 library(raster)
 library(rasterVis)
-pm_rf <- raster("PM_RF.tif") # predicted with Random Forest
-pm_wa <- raster("PM_WA.tif") # weighted average
-pm_rf <- as.factor(pm_rf)
+library(plotKML)
+
+pm_wa <- raster("_.tif") # predicted weighted average
 pm_wa <- as.factor(pm_wa)
-rat0 <- levels(pm_rf)[[1]]
 rat1 <- levels(pm_wa)[[1]]
 rat1[["pm"]] <- c("Неоген. песч. отл. (40-80 см)",
                  "Неоген. глин. отл. (150-200 см)",
                  "Покровные отложения")
-levels(pm_rf) <- rat0
 levels(pm_wa) <- rat1
+contours <- readShapeLines("Isolines.shp") # relief isolines
 print(
-levelplot(pm_wa, col.regions = SAGA_pal[[1]])
+levelplot(pm_wa, col.regions = SAGA_pal[[1]],
+          # main = "Ареалы подстилания почв",
+          scales = list(draw = F))
 + layer(sp.lines(contours, col = 'dimgrey', alpha = 0.75, lwd = 0.75)))
 #-----------------------------------------------------------------------------#
 require(gridExtra)
