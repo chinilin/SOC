@@ -71,14 +71,14 @@ df
 datatable(df,  options = list(
   columnDefs = list(list(className = 'dt-left', targets = c(0,1,2,3,4,5))),
   pageLength = MAX,
-  order = list(list(2, 'desc'))),
-  colnames = c('Num', 'Name', 'R2', 'RMSE', 'time [s]', 'Model name'),
-  caption = paste('Regression results from caret models'),
+  order = list(list(3, 'desc'))),
+  colnames = c('№', 'Name', 'R2', 'RMSE', 'time [s]', 'Model name'),
+  caption = paste('Regression results from "caret" list models'),
   class = 'cell-border stripe')  %>%
   formatRound('x2', 3) %>%
   formatRound('x3', 3) %>%
   formatRound('x4', 3) %>%
-  formatStyle(2,
+  formatStyle(3,
               background = styleColorBar(x2, 'steelblue'),
               backgroundSize = '100% 90%',
               backgroundRepeat = 'no-repeat',
@@ -98,7 +98,7 @@ cvMethods <- c("boot", # bootstrap
                "repeatedcv" # repeated n-fold cross validation
 )
 
-# use R lapply function to loop through all CV methos with qrf
+# use R lapply function to loop through all CV methos with cubist
 all <- lapply(cvMethods, function(x)
 {set.seed(1234); print(x); tc <- trainControl(method=(x))
 fit1 <- train(formulaString1, data = reg.matrix,
